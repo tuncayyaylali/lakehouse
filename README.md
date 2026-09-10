@@ -376,16 +376,19 @@ In MinIO Console (**[http://localhost:9001](http://localhost:9001)**), observe t
 ---
 
 ### Step 7: Query Tables in Trino CLI
-Connect to Trino CLI inside the pod:
+Connect to Trino CLI inside the pod using the administrative identity:
 
 ```powershell
-kubectl exec -it -n lakehouse deployment/trino -- trino --catalog iceberg
+kubectl exec -it -n lakehouse deployment/trino -- trino --catalog iceberg --user my-admin
 ```
+
+> **Security & Identity Note:** 
+> We explicitly pass `--user my-admin`. Because our RBAC authorization matrix ([`rules.json`](file:///c:/Users/Hp/projects/lakehouse/infra/engine/trino/trino-configmap.yaml)) strictly locks down the `iceberg` catalog against unauthenticated or unknown OS users (`trino`), attempting to connect without `--user` will result in `Access Denied: Cannot access catalog iceberg` when running `SHOW SCHEMAS`. Supplying `--user my-admin` identifies you with full administrative privileges.
 
 Run queries to inspect the data layers:
 
 ```sql
--- View all layers
+-- View all schemas (bronze, silver, gold)
 SHOW SCHEMAS;
 
 -- View aggregated business KPIs in Gold layer
@@ -413,7 +416,7 @@ SELECT count(*) AS remaining_orders FROM bronze.excel_orders;
 Inspect the snapshot history to locate the healthy snapshot ID prior to deletion:
 
 ```sql
--- View snapshot commit log
+-- View snapshot commit log for excel_orders
 SELECT snapshot_id, committed_at, operation 
 FROM bronze."excel_orders$snapshots" 
 ORDER BY committed_at DESC LIMIT 5;
@@ -425,13 +428,25 @@ WHERE category = 'Electronics';
 ```
 *(All 4 deleted records appear directly from the past!)*
 
+#### Practical Execution with [`transformations/query_snapshots.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/query_snapshots.sql)
+Instead of typing queries manually, execute the pre-built snapshot inspection script directly from your terminal or desktop client:
+
+```powershell
+# In PowerShell: Pipe script directly into Trino CLI
+Get-Content transformations/query_snapshots.sql | kubectl exec -i -n lakehouse deployment/trino -- trino --catalog iceberg --user my-admin
+
+# In Linux / macOS / Git Bash:
+kubectl exec -i -n lakehouse deployment/trino -- trino --catalog iceberg --user my-admin < transformations/query_snapshots.sql
+```
+*(Alternatively, open [`transformations/query_snapshots.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/query_snapshots.sql) in DBeaver and press `Alt+X` to run all statements).*
+
 > **Script Overview — [`transformations/query_snapshots.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/query_snapshots.sql):**
-> Provides diagnostic queries inspecting Apache Iceberg internal metadata tables (`$snapshots`, `$history`, `$manifests`, `$files`) exposed through Trino, enabling engineers to inspect commit timestamps, summary operations, and Parquet data files.
+> Provides diagnostic queries inspecting Apache Iceberg internal metadata tables (`$snapshots`, `$history`, `$manifests`, `$files`) across `bronze.excel_orders` and `bronze.orders`, enabling data engineers to inspect commit timestamps, operation types (`append`, `overwrite`, `delete`), and snapshot IDs.
 
 ---
 
 ### Step 10: Zero-Data-Loss Disaster Recovery
-Restore the deleted rows with a single SQL statement:
+Restore the deleted rows with a single SQL statement in Trino CLI:
 
 ```sql
 INSERT INTO bronze.excel_orders
@@ -442,8 +457,32 @@ WHERE category = 'Electronics';
 SELECT count(*) AS total_orders FROM bronze.excel_orders;
 ```
 
+#### Automated End-to-End Disaster Recovery Script: [`transformations/time_travel_demo.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/time_travel_demo.sql)
+The repository provides a complete, automated end-to-end disaster recovery demonstration script that walks through the entire cycle (initial state $\rightarrow$ accidental deletion $\rightarrow$ damaged state verification $\rightarrow$ time-travel query $\rightarrow$ historical restoration $\rightarrow$ zero-loss validation).
+
+Run it directly with a single command:
+
+```powershell
+# In PowerShell: Run automated disaster recovery playbook
+Get-Content transformations/time_travel_demo.sql | kubectl exec -i -n lakehouse deployment/trino -- trino --catalog iceberg --user my-admin
+
+# In Linux / macOS / Git Bash:
+kubectl exec -i -n lakehouse deployment/trino -- trino --catalog iceberg --user my-admin < transformations/time_travel_demo.sql
+```
+
+**Observed Execution Output:**
+```text
+"1. INITIAL STATE BEFORE INCIDENT","10","5405.5"
+DELETE: 4 rows
+"2. DAMAGED STATE AFTER ACCIDENTAL DELETE","6","825.5"
+"3. HISTORICAL SNAPSHOT VIA TIME TRAVEL","10","5405.5"
+INSERT: 4 rows
+"4. FINAL RESTORED STATE (ZERO DATA LOSS)","10","5405.5"
+```
+*(Or open [`transformations/time_travel_demo.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/time_travel_demo.sql) inside DBeaver and press `Alt+X` to watch all 6 phases execute interactively).*
+
 > **Playbook Overview — [`transformations/time_travel_demo.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/time_travel_demo.sql):**
-> Complete SQL playbook walking through the entire lifecycle: simulating accidental data loss, discovering pre-incident snapshots, running historical time-travel queries, and performing a non-destructive zero-downtime table rollback.
+> Complete SQL playbook proving ACID rollback capabilities on Apache Iceberg. Demonstrates simulated data loss, discovers historical snapshot metadata, executes time-travel extraction, and achieves 100% zero-data-loss recovery without taking the platform offline.
 
 ---
 
