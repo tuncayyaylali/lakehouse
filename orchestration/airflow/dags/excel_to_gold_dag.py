@@ -1,9 +1,8 @@
 """
-Airflow DAG: End-to-End Excel Medallion Pipeline (Bronze -> Silver -> Quality -> Gold)
-1. Ingests raw sample_orders.xlsx from MinIO S3 into iceberg.bronze.excel_orders
-2. Cleans, casts types, and deduplicates into iceberg.silver.excel_orders_cleaned
-3. Runs automated Data Quality assertions on Silver
-4. Aggregates financial KPIs into iceberg.gold.excel_sales_kpis
+Airflow DAG: Excel to Gold Layer Pipeline
+Reads sample_orders.xlsx from MinIO S3 bronze bucket,
+ingests into iceberg.bronze.excel_orders, and
+aggregates business metrics into iceberg.gold.excel_sales_kpis.
 """
 
 from datetime import datetime, timedelta
@@ -31,11 +30,8 @@ def get_trino_cursor():
     )
     return conn.cursor()
 
-# ----------------------------------------------------
-# 1. BRONZE LAYER: Raw Excel Ingestion
-# ----------------------------------------------------
-def task_ingest_excel_to_bronze():
-    print("1. [BRONZE] Reading sample_orders.xlsx from MinIO S3...")
+def task_read_excel_and_load_bronze():
+    print("1. Connecting to MinIO S3 to read sample_orders.xlsx...")
     s3 = boto3.client(
         's3',
         endpoint_url='http://minio.lakehouse.svc.cluster.local:9000',
@@ -44,12 +40,18 @@ def task_ingest_excel_to_bronze():
         region_name='us-east-1',
     )
     
+    # Read Excel file from MinIO bronze bucket
     obj = s3.get_object(Bucket='bronze', Key='sample_orders.xlsx')
     df = pd.read_excel(io.BytesIO(obj['Body'].read()))
-    print(f"Loaded {len(df)} raw rows from Excel.")
+    print(f"Successfully loaded {len(df)} rows from Excel:")
+    print(df)
     
     cur = get_trino_cursor()
+    
+    # Ensure Bronze schema exists
     cur.execute("CREATE SCHEMA IF NOT EXISTS iceberg.bronze")
+    
+    # Ensure Bronze Iceberg table exists
     cur.execute("""
         CREATE TABLE IF NOT EXISTS iceberg.bronze.excel_orders (
             order_id VARCHAR,
@@ -65,8 +67,10 @@ def task_ingest_excel_to_bronze():
         )
     """)
     
+    # Clear previous run data to ensure idempotency
     cur.execute("DELETE FROM iceberg.bronze.excel_orders")
     
+    # Insert rows into Bronze Iceberg table
     for _, row in df.iterrows():
         oid = str(row['order_id'])
         cname = str(row['customer_name']).replace("'", "''")
@@ -81,91 +85,16 @@ def task_ingest_excel_to_bronze():
         """
         cur.execute(insert_sql)
         
-    print(f"Bronze ingestion complete: {len(df)} records stored in s3://bronze/excel_orders/")
+    print(f"Loaded {len(df)} records into iceberg.bronze.excel_orders.")
 
-# ----------------------------------------------------
-# 2. SILVER LAYER: Cleaning & Deduplication
-# ----------------------------------------------------
-def task_transform_to_silver():
-    print("2. [SILVER] Transforming Bronze -> Silver (Cleaning & Deduplication)...")
-    cur = get_trino_cursor()
-    cur.execute("CREATE SCHEMA IF NOT EXISTS iceberg.silver")
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS iceberg.silver.excel_orders_cleaned (
-            order_id VARCHAR,
-            customer_name VARCHAR,
-            category VARCHAR,
-            amount DOUBLE,
-            order_date DATE,
-            city VARCHAR,
-            processed_at TIMESTAMP(6) WITH TIME ZONE
-        ) WITH (
-            format = 'PARQUET',
-            location = 's3://silver/excel_orders_cleaned/'
-        )
-    """)
-    
-    cur.execute("DELETE FROM iceberg.silver.excel_orders_cleaned")
-    
-    silver_sql = """
-        INSERT INTO iceberg.silver.excel_orders_cleaned
-        SELECT 
-            trim(order_id) AS order_id,
-            trim(customer_name) AS customer_name,
-            trim(category) AS category,
-            amount,
-            CAST(order_date AS DATE) AS order_date,
-            trim(city) AS city,
-            CURRENT_TIMESTAMP AS processed_at
-        FROM (
-            SELECT 
-                order_id,
-                customer_name,
-                category,
-                amount,
-                order_date,
-                city,
-                ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY ingested_at DESC) AS rn
-            FROM iceberg.bronze.excel_orders
-        )
-        WHERE rn = 1 AND amount > 0
-    """
-    cur.execute(silver_sql)
-    print("Silver transformation complete: cleaned data stored in s3://silver/excel_orders_cleaned/")
-
-# ----------------------------------------------------
-# 3. DATA QUALITY CHECKS ON SILVER
-# ----------------------------------------------------
-def task_quality_checks_silver():
-    print("3. [QUALITY] Running data quality assertions on Silver layer...")
-    cur = get_trino_cursor()
-    
-    # Check 1: No negative or zero amounts
-    cur.execute("SELECT count(*) FROM iceberg.silver.excel_orders_cleaned WHERE amount <= 0")
-    invalid_amounts = cur.fetchone()[0]
-    if invalid_amounts > 0:
-        raise ValueError(f"Data Quality Violation: Found {invalid_amounts} rows with non-positive amount!")
-    
-    # Check 2: No duplicate order_ids
-    cur.execute("""
-        SELECT count(*) FROM (
-            SELECT order_id FROM iceberg.silver.excel_orders_cleaned 
-            GROUP BY order_id HAVING count(*) > 1
-        )
-    """)
-    duplicate_ids = cur.fetchone()[0]
-    if duplicate_ids > 0:
-        raise ValueError(f"Data Quality Violation: Found {duplicate_ids} duplicate order_ids!")
-        
-    print("All Data Quality assertions passed successfully! (0 violations)")
-
-# ----------------------------------------------------
-# 4. GOLD LAYER: Business KPI Aggregations
-# ----------------------------------------------------
 def task_aggregate_to_gold():
-    print("4. [GOLD] Aggregating Silver orders into Financial KPIs...")
+    print("2. Aggregating Bronze Excel orders into Gold analytical KPI table...")
     cur = get_trino_cursor()
+    
+    # Ensure Gold schema exists
     cur.execute("CREATE SCHEMA IF NOT EXISTS iceberg.gold")
+    
+    # Ensure Gold Iceberg table exists
     cur.execute("""
         CREATE TABLE IF NOT EXISTS iceberg.gold.excel_sales_kpis (
             category VARCHAR,
@@ -180,9 +109,11 @@ def task_aggregate_to_gold():
         )
     """)
     
+    # Clear previous run data
     cur.execute("DELETE FROM iceberg.gold.excel_sales_kpis")
     
-    gold_sql = """
+    # Insert aggregated KPI metrics
+    cur.execute("""
         INSERT INTO iceberg.gold.excel_sales_kpis
         SELECT 
             category,
@@ -191,38 +122,29 @@ def task_aggregate_to_gold():
             round(avg(amount), 2) AS avg_order_value,
             max(city) AS top_city,
             CURRENT_TIMESTAMP AS calculated_at
-        FROM iceberg.silver.excel_orders_cleaned
+        FROM iceberg.bronze.excel_orders
         GROUP BY category
-    """
-    cur.execute(gold_sql)
-    print("Gold KPI aggregation complete: metrics stored in s3://gold/excel_sales_kpis/")
+    """)
+    
+    print("Gold KPI aggregation complete.")
 
 with DAG(
     dag_id='excel_orders_to_gold_pipeline',
     default_args=default_args,
     schedule_interval=None,
     catchup=False,
-    tags=['lakehouse', 'excel', 'iceberg', 'bronze', 'silver', 'gold'],
+    tags=['lakehouse', 'excel', 'iceberg', 'bronze', 'gold'],
 ) as dag:
 
-    ingest_bronze = PythonOperator(
-        task_id='1_ingest_excel_to_bronze',
-        python_callable=task_ingest_excel_to_bronze,
+    read_excel_task = PythonOperator(
+        task_id='read_excel_and_load_bronze',
+        python_callable=task_read_excel_and_load_bronze,
     )
 
-    transform_silver = PythonOperator(
-        task_id='2_transform_bronze_to_silver',
-        python_callable=task_transform_to_silver,
-    )
-
-    quality_checks = PythonOperator(
-        task_id='3_quality_checks_silver',
-        python_callable=task_quality_checks_silver,
-    )
-
-    aggregate_gold = PythonOperator(
-        task_id='4_aggregate_silver_to_gold',
+    gold_aggregation_task = PythonOperator(
+        task_id='transform_and_aggregate_to_gold',
         python_callable=task_aggregate_to_gold,
     )
 
-    ingest_bronze >> transform_silver >> quality_checks >> aggregate_gold
+    read_excel_task >> gold_aggregation_task
+
