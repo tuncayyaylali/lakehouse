@@ -8,40 +8,40 @@ An enterprise-grade, end-to-end modern Lakehouse platform deployed natively on K
 
 ```mermaid
 flowchart TD
-    subgraph ClientLayer ["Client & Access Layer"]
-        Browser["Web Browser (Web UI / Keycloak SSO)"]
-        CLI["Trino CLI / kubectl"]
-        DBeaver["DBeaver Desktop SQL Client\n(Host: localhost:8082 | Catalog: iceberg)"]
+    subgraph ClientLayer ["Client and Access Layer"]
+        Browser["Web Browser (Web UI, Keycloak SSO)"]
+        CLI["Trino CLI and kubectl"]
+        DBeaver["DBeaver Desktop SQL Client\n(Host: localhost:8082, Catalog: iceberg)"]
     end
 
-    subgraph Security ["Identity, SSO & Authorization (Keycloak IAM)"]
-        Keycloak["Keycloak 24.0.5 (OIDC / OAuth2)\nRealm: lakehouse | Direct-Login Flow"]
+    subgraph Security ["Identity, SSO and Authorization (Keycloak IAM)"]
+        Keycloak["Keycloak 24.0.5 (OIDC, OAuth2)\nRealm: lakehouse - Direct-Login Flow"]
         PGKeycloak[("PostgreSQL\nKeycloak Backend")]
         Keycloak --> PGKeycloak
     end
 
-    subgraph IngressLayer ["Networking & Port Forwarding"]
+    subgraph IngressLayer ["Networking and Port Forwarding"]
         IngressNginx["NGINX Ingress Controller"]
-        PortForward["Localhost Port-Forwards\n8081 (Keycloak) | 9001 (MinIO)\n8443 (Trino Web UI) | 8082 (Trino JDBC/CLI)\n8083 (Airflow)"]
+        PortForward["Localhost Port-Forwards:\n8081 (Keycloak), 9001 (MinIO)\n8443 (Trino Web UI), 8082 (Trino JDBC)\n8083 (Airflow)"]
     end
 
-    subgraph Orchestration ["Orchestration & Data Pipelines (Apache Airflow)"]
+    subgraph Orchestration ["Orchestration and Data Pipelines (Apache Airflow)"]
         Airflow["Apache Airflow 2.9.1\nDAG: excel_orders_to_gold_pipeline.py\nDAG: ecommerce_order_pipeline.py\nDAG: lakehouse_elt_pipeline.py"]
     end
 
-    subgraph Engine ["Distributed Query Engine & Security (Trino)"]
-        Trino["Trino SQL Engine (v444)\nOAuth2 SSO (Port 8443 HTTPS)\nPlain HTTP JDBC (Port 8082)\nFile-based RBAC (rules.json)"]
+    subgraph Engine ["Distributed Query Engine and Security (Trino)"]
+        Trino["Trino SQL Engine v444\nOAuth2 SSO (Port 8443 HTTPS)\nPlain HTTP JDBC (Port 8082)\nFile-based RBAC (rules.json)"]
     end
 
     subgraph Catalog ["Metadata Catalog (Project Nessie)"]
-        Nessie["Project Nessie (Iceberg REST Catalog)\nBranch: main | REST Protocol"]
+        Nessie["Project Nessie (Iceberg REST Catalog)\nBranch: main - REST Protocol"]
     end
 
     subgraph Storage ["Object Storage (MinIO S3)"]
         MinIO["MinIO Object Storage"]
         WarehouseBucket[("warehouse/ (Nessie Metastore)")]
-        BronzeBucket[("bronze/ (Raw Excel & Ingested Parquet)")]
-        SilverBucket[("silver/ (Cleaned & Deduplicated Parquet)")]
+        BronzeBucket[("bronze/ (Raw Excel, Ingested Parquet)")]
+        SilverBucket[("silver/ (Cleaned, Deduplicated Parquet)")]
         GoldBucket[("gold/ (Aggregated Financial KPIs Parquet)")]
         MinIO --> WarehouseBucket
         MinIO --> BronzeBucket
@@ -52,15 +52,15 @@ flowchart TD
     Browser --> IngressNginx
     Browser --> PortForward
     CLI --> Trino
-    DBeaver -->|Trino JDBC (Port 8082)| Trino
+    DBeaver -->|Trino JDBC Port 8082| Trino
 
-    Airflow -->|Boto3 S3 Read/Write| MinIO
-    Airflow -->|Trino DBAPI / SQL| Trino
+    Airflow -->|Boto3 S3 Read and Write| MinIO
+    Airflow -->|Trino DBAPI and SQL| Trino
 
     Trino -->|REST Catalog Protocol| Nessie
-    Trino -->|S3 Parquet Read/Write| MinIO
+    Trino -->|S3 Parquet Read and Write| MinIO
     Nessie -.->|Commit Metadata JSON| WarehouseBucket
-    Keycloak -->|OIDC / OAuth2 Token Validation| Trino
+    Keycloak -->|OIDC and OAuth2 Token Validation| Trino
 ```
 
 ---
