@@ -117,3 +117,4 @@ Tested Iceberg and Project Nessie metadata snapshots for disaster recovery:
 | **MinIO Console** | `http://localhost:9001` | HTTP / Keycloak OIDC SSO | `admin` / `Admin@123` or SSO button |
 | **Apache Airflow** | `http://localhost:8083` | HTTP / Airflow Login | `admin` / `FqEAqUgX8SNbqtDG` |
 | **Project Nessie** | Cluster: `http://nessie:19120` | HTTP / REST Iceberg Catalog | Nessie v1 API / `main` branch |
+
