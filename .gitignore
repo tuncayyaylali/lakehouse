@@ -1,3 +1,7 @@
+# Agent guidelines (local only)
+AGENTS.md
+AGENTS.MD
+
 # Python
 __pycache__/
 *.py[cod]
