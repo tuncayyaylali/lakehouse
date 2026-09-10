@@ -1,0 +1,25 @@
+version: 2
+
+sources:
+  - name: bronze
+    database: iceberg
+    schema: bronze
+    tables:
+      - name: raw_users
+        description: "Raw user records ingested from REST API via Airflow"
+        columns:
+          - name: id
+            description: "User ID"
+          - name: name
+            description: "User full name"
+          - name: username
+            description: "User handle"
+          - name: email
+            description: "User email address"
+          - name: city
+            description: "User location city"
+          - name: company_name
+            description: "User organization company"
+          - name: ingested_at
+            description: "Ingestion timestamp"
+

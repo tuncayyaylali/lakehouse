@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nessie
+  namespace: lakehouse
+  labels:
+    app.kubernetes.io/name: nessie
+    app.kubernetes.io/part-of: lakehouse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nessie
+  template:
+    metadata:
+      labels:
+        app: nessie
+    spec:
+      containers:
+        - name: nessie
+          image: projectnessie/nessie:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NESSIE_VERSION_STORE_TYPE
+              value: "IN_MEMORY"
+          ports:
+            - name: http
+              containerPort: 19120
+          readinessProbe:
+            httpGet:
+              path: /q/health/ready
+              port: 19120
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /q/health/live
+              port: 19120
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1024Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nessie
+  namespace: lakehouse
+  labels:
+    app.kubernetes.io/name: nessie
+    app.kubernetes.io/part-of: lakehouse
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 19120
+      targetPort: 19120
+  selector:
+    app: nessie
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nessie-ingress
+  namespace: lakehouse
+  labels:
+    app.kubernetes.io/part-of: lakehouse
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: nessie.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nessie
+                port:
+                  number: 19120

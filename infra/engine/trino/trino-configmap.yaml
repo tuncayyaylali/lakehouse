@@ -1,0 +1,116 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trino-config
+  namespace: lakehouse
+  labels:
+    app.kubernetes.io/name: trino
+    app.kubernetes.io/part-of: lakehouse
+data:
+  node.properties: |
+    node.environment=lakehouse
+    node.data-dir=/data/trino
+
+  jvm.config: |
+    -server
+    -Xmx2G
+    -XX:+UseG1GC
+    -XX:G1PeriodicGCInterval=10000
+    -XX:+ExplicitGCInvokesConcurrent
+    -XX:+ExitOnOutOfMemoryError
+    -Djdk.attach.allowAttachSelf=true
+    -Dsun.reflect.inflationThreshold=0
+
+  config.properties: |
+    coordinator=true
+    node-scheduler.include-coordinator=true
+    http-server.http.port=8080
+    http-server.https.enabled=true
+    http-server.https.port=8443
+    http-server.https.keystore.path=/data/trino/keystore.jks
+    http-server.https.keystore.key=changeit
+    http-server.process-forwarded=true
+    query.max-memory=2GB
+    query.max-memory-per-node=1GB
+    discovery.uri=http://localhost:8080
+    access-control.config-files=/etc/trino/access-control.properties
+    internal-communication.shared-secret=trino-cluster-secret-12345
+
+    web-ui.authentication.type=oauth2
+    http-server.authentication.oauth2.oidc.discovery=false
+    http-server.authentication.oauth2.issuer=http://localhost:8081/realms/lakehouse
+    http-server.authentication.oauth2.client-id=trino
+    http-server.authentication.oauth2.client-secret=trino-client-secret-12345
+    http-server.authentication.oauth2.scopes=openid,profile,email
+    http-server.authentication.oauth2.principal-field=preferred_username
+    http-server.authentication.oauth2.auth-url=http://localhost:8081/realms/lakehouse/protocol/openid-connect/auth
+    http-server.authentication.oauth2.token-url=http://keycloak.lakehouse.svc.cluster.local:8080/realms/lakehouse/protocol/openid-connect/token
+    http-server.authentication.oauth2.jwks-url=http://keycloak.lakehouse.svc.cluster.local:8080/realms/lakehouse/protocol/openid-connect/certs
+    http-server.authentication.oauth2.userinfo-url=http://keycloak.lakehouse.svc.cluster.local:8080/realms/lakehouse/protocol/openid-connect/userinfo
+    http-server.authentication.oauth2.end-session-url=http://localhost:8081/realms/lakehouse/protocol/openid-connect/logout
+
+  access-control.properties: |
+    access-control.name=file
+    security.config-file=/etc/trino/rules.json
+    security.refresh-period=10s
+
+  rules.json: |
+    {
+      "catalogs": [
+        {
+          "user": ".*",
+          "catalog": ".*",
+          "allow": "all"
+        }
+      ],
+      "schemas": [
+        {
+          "user": ".*analyst.*",
+          "schema": "bronze.*",
+          "owner": false
+        },
+        {
+          "user": ".*",
+          "schema": ".*",
+          "owner": true
+        }
+      ],
+      "tables": [
+        {
+          "user": ".*analyst.*",
+          "schema": "bronze.*",
+          "table": ".*",
+          "privileges": []
+        },
+        {
+          "user": ".*analyst.*",
+          "schema": "silver.*",
+          "table": ".*",
+          "privileges": ["SELECT"]
+        },
+        {
+          "user": ".*analyst.*",
+          "schema": "gold.*",
+          "table": ".*",
+          "privileges": ["SELECT"]
+        },
+        {
+          "user": ".*",
+          "privileges": ["SELECT", "INSERT", "DELETE", "UPDATE", "OWNERSHIP"]
+        }
+      ]
+    }
+
+  iceberg.properties: |
+    connector.name=iceberg
+    iceberg.catalog.type=nessie
+    iceberg.nessie-catalog.uri=http://nessie.lakehouse.svc.cluster.local:19120/api/v1
+    iceberg.nessie-catalog.default-warehouse-dir=s3://warehouse/
+
+    fs.native-s3.enabled=true
+    s3.endpoint=http://minio.lakehouse.svc.cluster.local:9000
+    s3.region=us-east-1
+    s3.path-style-access=true
+    s3.aws-access-key=minioadmin
+    s3.aws-secret-key=minioadmin
+    iceberg.file-format=PARQUET

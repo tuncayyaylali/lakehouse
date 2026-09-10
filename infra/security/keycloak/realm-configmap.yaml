@@ -1,0 +1,137 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-lakehouse-realm
+  namespace: lakehouse
+  labels:
+    app.kubernetes.io/part-of: lakehouse
+    app.kubernetes.io/component: identity-realm
+data:
+  lakehouse-realm.json: |
+    {
+      "realm": "lakehouse",
+      "enabled": true,
+      "displayName": "Lakehouse Data Platform",
+      "sslRequired": "none",
+      "registrationAllowed": false,
+      "roles": {
+        "realm": [
+          {
+            "name": "admin",
+            "description": "Platform Administrator"
+          },
+          {
+            "name": "data-engineer",
+            "description": "Data Engineer with read and write access across lakehouse layers"
+          },
+          {
+            "name": "data-analyst",
+            "description": "Data Analyst with read access restricted to Gold layer"
+          }
+        ]
+      },
+      "clients": [
+        {
+          "clientId": "trino",
+          "name": "Trino SQL Engine",
+          "enabled": true,
+          "clientAuthenticatorType": "client-secret",
+          "secret": "trino-client-secret-12345",
+          "redirectUris": ["*"],
+          "webOrigins": ["*"],
+          "standardFlowEnabled": true,
+          "directAccessGrantsEnabled": true,
+          "serviceAccountsEnabled": true,
+          "publicClient": false,
+          "protocol": "openid-connect",
+          "protocolMappers": [
+            {
+              "name": "audience-mapper",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-audience-mapper",
+              "consentRequired": false,
+              "config": {
+                "included.client.audience": "trino",
+                "id.token.claim": "true",
+                "access.token.claim": "true"
+              }
+            },
+            {
+              "name": "groups-mapper",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-group-membership-mapper",
+              "consentRequired": false,
+              "config": {
+                "claim.name": "groups",
+                "full.path": "false",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "userinfo.token.claim": "true"
+              }
+            }
+          ]
+        },
+        {
+          "clientId": "minio",
+          "name": "MinIO Object Storage",
+          "enabled": true,
+          "clientAuthenticatorType": "client-secret",
+          "secret": "minio-client-secret-12345",
+          "redirectUris": ["*"],
+          "webOrigins": ["*"],
+          "standardFlowEnabled": true,
+          "directAccessGrantsEnabled": true,
+          "serviceAccountsEnabled": false,
+          "publicClient": false,
+          "protocol": "openid-connect"
+        }
+      ],
+      "users": [
+        {
+          "username": "admin",
+          "enabled": true,
+          "email": "admin@lakehouse.local",
+          "firstName": "Platform",
+          "lastName": "Admin",
+          "credentials": [
+            {
+              "type": "password",
+              "value": "Admin@123",
+              "temporary": false
+            }
+          ],
+          "realmRoles": ["admin"]
+        },
+        {
+          "username": "engineer",
+          "enabled": true,
+          "email": "engineer@lakehouse.local",
+          "firstName": "Data",
+          "lastName": "Engineer",
+          "credentials": [
+            {
+              "type": "password",
+              "value": "Engineer@123",
+              "temporary": false
+            }
+          ],
+          "realmRoles": ["data-engineer"]
+        },
+        {
+          "username": "analyst",
+          "enabled": true,
+          "email": "analyst@lakehouse.local",
+          "firstName": "Data",
+          "lastName": "Analyst",
+          "credentials": [
+            {
+              "type": "password",
+              "value": "Analyst@123",
+              "temporary": false
+            }
+          ],
+          "realmRoles": ["data-analyst"]
+        }
+      ]
+    }
+

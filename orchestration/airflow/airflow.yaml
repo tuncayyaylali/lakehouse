@@ -1,0 +1,142 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: airflow-data-pvc
+  namespace: lakehouse
+  labels:
+    app.kubernetes.io/part-of: lakehouse
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow
+  namespace: lakehouse
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/part-of: lakehouse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow
+  template:
+    metadata:
+      labels:
+        app: airflow
+    spec:
+      containers:
+        - name: airflow
+          image: apache/airflow:2.9.1
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -c
+            - |
+              rm -f /opt/airflow/*.pid
+              pip install --no-cache-dir apache-airflow-providers-trino requests --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.9.1/constraints-3.12.txt"
+              mkdir -p /opt/airflow/dags
+              if [ -d "/opt/airflow/dags_config" ]; then
+                cp -L /opt/airflow/dags_config/*.py /opt/airflow/dags/ 2>/dev/null || true
+              fi
+              airflow standalone
+          env:
+            - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+              value: "postgresql+psycopg2://keycloak:keycloak_db_password@postgres-keycloak:5432/airflow"
+            - name: AIRFLOW__CORE__LOAD_EXAMPLES
+              value: "False"
+            - name: AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION
+              value: "False"
+            - name: AIRFLOW__API__AUTH_BACKENDS
+              value: "airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session"
+            - name: AIRFLOW_CONN_TRINO_LAKEHOUSE
+              value: "trino://admin@trino.lakehouse.svc.cluster.local:8080/iceberg"
+            - name: AIRFLOW_CONN_AWS_DEFAULT
+              value: "aws://minioadmin:minioadmin@/?endpoint_url=http%3A%2F%2Fminio.lakehouse.svc.cluster.local%3A9000"
+          ports:
+            - name: http
+              containerPort: 8080
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1024Mi
+            limits:
+              cpu: 2000m
+              memory: 4096Mi
+          volumeMounts:
+            - name: airflow-data
+              mountPath: /opt/airflow
+            - name: airflow-dags-vol
+              mountPath: /opt/airflow/dags_config
+      volumes:
+        - name: airflow-data
+          persistentVolumeClaim:
+            claimName: airflow-data-pvc
+        - name: airflow-dags-vol
+          configMap:
+            name: airflow-dags
+            optional: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow-webserver
+  namespace: lakehouse
+  labels:
+    app.kubernetes.io/name: airflow
+    app.kubernetes.io/part-of: lakehouse
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+  selector:
+    app: airflow
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: airflow-ingress
+  namespace: lakehouse
+  labels:
+    app.kubernetes.io/part-of: lakehouse
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: airflow.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: airflow-webserver
+                port:
+                  number: 8080

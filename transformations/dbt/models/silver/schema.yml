@@ -1,0 +1,16 @@
+version: 2
+
+models:
+  - name: stg_users
+    description: "Cleaned and standardized users data in Silver layer"
+    columns:
+      - name: user_id
+        description: "Primary identifier for user"
+        tests:
+          - unique
+          - not_null
+      - name: email_address
+        description: "Sanitized lowercase email address"
+        tests:
+          - not_null
+

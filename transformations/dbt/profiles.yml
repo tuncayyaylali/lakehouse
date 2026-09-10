@@ -1,0 +1,14 @@
+lakehouse_trino:
+  target: dev
+  outputs:
+    dev:
+      type: trino
+      method: none
+      user: admin
+      host: trino.lakehouse.svc.cluster.local
+      port: 8080
+      database: iceberg
+      schema: bronze
+      threads: 4
+      http_scheme: http
+

@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trino
+  namespace: lakehouse
+  labels:
+    app.kubernetes.io/name: trino
+    app.kubernetes.io/part-of: lakehouse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trino
+  template:
+    metadata:
+      labels:
+        app: trino
+    spec:
+      containers:
+        - name: trino
+          image: trinodb/trino:444
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -c
+            - |
+              mkdir -p /data/trino
+              if [ ! -f /data/trino/keystore.jks ]; then
+                keytool -genkeypair -alias trino -keyalg RSA -keystore /data/trino/keystore.jks -storepass changeit -keypass changeit -dname "CN=localhost, OU=Lakehouse, O=Lakehouse, L=Local, ST=Local, C=US" -validity 365
+              fi
+              /usr/lib/trino/bin/run-trino
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: https
+              containerPort: 8443
+          startupProbe:
+            httpGet:
+              path: /v1/info
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /v1/info
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /v1/info
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1536Mi
+            limits:
+              cpu: 2000m
+              memory: 3072Mi
+          volumeMounts:
+            - name: trino-config-vol
+              mountPath: /etc/trino/node.properties
+              subPath: node.properties
+            - name: trino-config-vol
+              mountPath: /etc/trino/jvm.config
+              subPath: jvm.config
+            - name: trino-config-vol
+              mountPath: /etc/trino/config.properties
+              subPath: config.properties
+            - name: trino-config-vol
+              mountPath: /etc/trino/access-control.properties
+              subPath: access-control.properties
+            - name: trino-config-vol
+              mountPath: /etc/trino/rules.json
+              subPath: rules.json
+            - name: trino-config-vol
+              mountPath: /etc/trino/catalog/iceberg.properties
+              subPath: iceberg.properties
+      volumes:
+        - name: trino-config-vol
+          configMap:
+            name: trino-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trino
+  namespace: lakehouse
+  labels:
+    app.kubernetes.io/name: trino
+    app.kubernetes.io/part-of: lakehouse
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+    - name: https
+      port: 8443
+      targetPort: 8443
+  selector:
+    app: trino
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: trino-ingress
+  namespace: lakehouse
+  labels:
+    app.kubernetes.io/part-of: lakehouse
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: trino.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: trino
+                port:
+                  number: 8080
+
