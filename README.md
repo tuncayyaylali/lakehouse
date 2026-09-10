@@ -114,7 +114,124 @@ lakehouse/
 
 ---
 
-## 3. Step-by-Step Base Deployment (Pure `kubectl`)
+## 3. Comprehensive File & Pipeline Catalog (Code Architecture)
+
+This section provides an in-depth reference explaining the purpose, architecture, internal functions, and execution mechanics of every file in the repository, with special focus on the **Python (`.py`) orchestration pipelines**.
+
+---
+
+### 3.1 Python Data Pipelines (`orchestration/airflow/dags/`)
+
+#### 1. [`excel_to_gold_dag.py`](file:///c:/Users/Hp/projects/lakehouse/orchestration/airflow/dags/excel_to_gold_dag.py) — End-to-End Excel Medallion Pipeline
+* **Purpose:** Implements a production-grade Medallion Architecture (Bronze $\rightarrow$ Silver $\rightarrow$ Gold) processing raw Excel spreadsheets (`.xlsx`) directly into ACID Iceberg Parquet tables.
+* **Libraries & Dependencies:**
+  * `boto3`: Connects to MinIO S3 object storage endpoint (`http://minio.lakehouse.svc.cluster.local:9000`) using access key `minioadmin`.
+  * `pandas` & `openpyxl`: Reads and parses the multi-column Excel binary stream in-memory without local disk bottlenecks.
+  * `trino.dbapi`: Connects to Trino distributed query engine via secure HTTPS port `8443` using `trino.auth.BasicAuthentication('admin', 'Admin@2026')`.
+* **Architecture & Task Flow:**
+  ```mermaid
+  flowchart LR
+      T1["1_ingest_excel_to_bronze\n(Read S3 Excel -> Bronze Table)"] --> T2["2_transform_bronze_to_silver\n(Cleanse, Cast, Deduplicate)"]
+      T2 --> T3["3_quality_checks_silver\n(Zero Nulls & ID Integrity)"]
+      T3 --> T4["4_aggregate_silver_to_gold\n(Category Financial KPIs)"]
+  ```
+* **Internal Function Breakdown:**
+  * `get_trino_cursor()`: Establishes a TLS-encrypted database connection to Trino (`host='trino.lakehouse.svc.cluster.local'`, `port=8443`, `http_scheme='https'`, `verify=False`, `auth=BasicAuthentication('admin', 'Admin@2026')`) ensuring zero credential leakage.
+  * `task_read_excel_and_load_bronze()`:
+    1. Fetches `sample_orders.xlsx` from bucket `bronze` in MinIO using `boto3.client('s3')`.
+    2. Reads spreadsheet rows into a pandas DataFrame.
+    3. Creates table `iceberg.bronze.excel_orders` if not exists with schema `(order_id, customer_name, category, amount, order_date, city, ingested_at)`.
+    4. Appends records with current UTC ingestion timestamp (`ingested_at = NOW()`).
+  * `task_transform_silver()`:
+    1. Creates target table `iceberg.silver.excel_orders_cleaned` partitioned by `city`.
+    2. Executes window deduplication: `ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY ingested_at DESC) = 1`.
+    3. Trims string whitespace and casts amounts to `DOUBLE` and dates to `VARCHAR`.
+  * `task_quality_checks_silver()`:
+    1. Executes automated data quality validation queries.
+    2. Verifies that duplicate order IDs count is exactly `0`.
+    3. Verifies that records with `amount <= 0` or null values count is exactly `0`.
+    4. Raises `ValueError` to halt pipeline execution if anomalies are detected.
+  * `task_aggregate_gold()`:
+    1. Creates business KPI table `iceberg.gold.excel_sales_kpis`.
+    2. Calculates `total_orders = COUNT(order_id)`, `total_revenue = SUM(amount)`, `avg_order_value = ROUND(AVG(amount), 2)`, and `top_city = ARBITRARY(city)` grouped by `category`.
+
+---
+
+#### 2. [`ecommerce_order_pipeline.py`](file:///c:/Users/Hp/projects/lakehouse/orchestration/airflow/dags/ecommerce_order_pipeline.py) — E-Commerce Financial Analytics Pipeline
+* **Purpose:** Simulates an enterprise high-velocity transactional e-commerce pipeline generating orders across Bronze, Silver, and Gold layers.
+* **Libraries & Dependencies:** `trino.dbapi`, `datetime`, `timedelta`.
+* **Architecture & Task Flow:**
+  * `task_ingest_orders_bronze()`: Creates table `iceberg.bronze.orders` with fields for `order_id`, `customer_name`, `customer_email`, `category`, `amount`, `payment_method`, `status`, `order_timestamp`, and `ingested_at`. Ingests 10 transactional purchase records.
+  * `task_clean_orders_silver()`: Creates `iceberg.silver.orders_cleaned`. Cleans customer emails to lowercase, validates order status (`COMPLETED`, `PENDING`, `SHIPPED`), removes failed orders, and deduplicates transactions.
+  * `task_sales_financial_kpis_gold()`: Computes multi-dimensional business metrics into `iceberg.gold.sales_financial_kpis`, summarizing total sales, average transaction size, and payment method share per category.
+
+---
+
+#### 3. [`lakehouse_elt_pipeline.py`](file:///c:/Users/Hp/projects/lakehouse/orchestration/airflow/dags/lakehouse_elt_pipeline.py) — Master Platform ELT Pipeline
+* **Purpose:** Demonstrates master ELT ingestion and serves as the integration orchestrator for dbt models.
+* **Libraries & Dependencies:** `trino.dbapi`, `airflow.models.DAG`.
+* **Architecture & Task Flow:**
+  * `task_ingest_bronze()`: Provisions `iceberg.bronze.raw_users` and seeds raw user interaction data.
+  * `task_run_dbt_transformations()`: Triggers dbt compilation and execution against the Trino Iceberg catalog, elevating raw records into cleaned Silver staging models (`stg_users.sql`) and dimensional Gold marts (`dim_users_summary.sql`).
+  * `task_validate_gold_kpis()`: Runs post-load reconciliation verifying record counts and schema consistency across the Medallion progression.
+
+---
+
+### 3.2 SQL Transformation & Audit Files (`transformations/`)
+
+* [`transformations/sql/silver_excel_orders.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/sql/silver_excel_orders.sql): SQL script executed during Step 2 of the Excel Medallion pipeline. Standardizes text fields with `TRIM()`, cleans order dates, and uses `ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY ingested_at DESC) = 1` for deduplication.
+* [`transformations/sql/gold_excel_sales_kpis.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/sql/gold_excel_sales_kpis.sql): SQL aggregation script computing category-level sales metrics (`COUNT(*)`, `SUM(amount)`, `AVG(amount)`).
+* [`transformations/time_travel_demo.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/time_travel_demo.sql): Complete SQL playbook demonstrating accidental data loss recovery. Shows how to query table snapshot history (`$snapshots`), query historical data (`FOR VERSION AS OF <snapshot_id>`), and perform instant single-query rollback.
+* [`transformations/query_snapshots.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/query_snapshots.sql): Diagnostic queries inspecting Iceberg internal metadata tables (`$snapshots`, `$history`, `$manifests`, `$files`).
+
+---
+
+### 3.3 dbt (Data Build Tool) Semantic Models (`transformations/dbt/`)
+
+* [`transformations/dbt/dbt_project.yml`](file:///c:/Users/Hp/projects/lakehouse/transformations/dbt/dbt_project.yml): Project-level configuration defining the project name, version, and model directory hierarchy.
+* [`transformations/dbt/profiles.yml`](file:///c:/Users/Hp/projects/lakehouse/transformations/dbt/profiles.yml): Database connection profile targeting Trino coordinator with the Iceberg catalog.
+* [`transformations/dbt/models/bronze/sources.yml`](file:///c:/Users/Hp/projects/lakehouse/transformations/dbt/models/bronze/sources.yml): Declarative source specification linking dbt models to `iceberg.bronze` raw tables.
+* [`transformations/dbt/models/silver/stg_users.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/dbt/models/silver/stg_users.sql): Silver dbt model that casts user IDs, normalizes email casing, filters null records, and deduplicates user registrations.
+* [`transformations/dbt/models/silver/schema.yml`](file:///c:/Users/Hp/projects/lakehouse/transformations/dbt/models/silver/schema.yml): Data quality tests for Silver models enforcing `unique` and `not_null` constraints.
+* [`transformations/dbt/models/gold/dim_users_summary.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/dbt/models/gold/dim_users_summary.sql): Gold dimensional mart aggregating user counts by status and registration month.
+
+---
+
+### 3.4 Kubernetes Infrastructure Manifests (`infra/`)
+
+#### Base & Security (`infra/k8s/base/` and `infra/security/keycloak/`)
+* [`infra/k8s/base/namespace.yaml`](file:///c:/Users/Hp/projects/lakehouse/infra/k8s/base/namespace.yaml): Declares the `lakehouse` Kubernetes namespace isolating all cluster workloads.
+* [`infra/security/keycloak/postgres.yaml`](file:///c:/Users/Hp/projects/lakehouse/infra/security/keycloak/postgres.yaml): Deploys PostgreSQL 15 database instance as the persistent metadata storage for Keycloak IAM.
+* [`infra/security/keycloak/realm-configmap.yaml`](file:///c:/Users/Hp/projects/lakehouse/infra/security/keycloak/realm-configmap.yaml): Declarative export of the `lakehouse` Keycloak realm. Defines the `direct-login` authentication flow, OIDC clients (`trino`, `minio`), client redirect URIs, and predefined realm roles (`admin`, `data-engineer`, `data-analyst`).
+* [`infra/security/keycloak/keycloak.yaml`](file:///c:/Users/Hp/projects/lakehouse/infra/security/keycloak/keycloak.yaml): Keycloak 24.0.5 deployment manifest, configuring JDBC connection to PostgreSQL, health probes, Service on port `8080`, and Ingress routing for `keycloak.local`.
+* [`infra/security/keycloak/oidc-secrets.yaml`](file:///c:/Users/Hp/projects/lakehouse/infra/security/keycloak/oidc-secrets.yaml): Kubernetes Secret defining shared client credentials (`trino-client-secret-12345`).
+
+#### Storage & Catalog (`infra/storage/minio/` and `infra/catalog/nessie/`)
+* [`infra/storage/minio/minio.yaml`](file:///c:/Users/Hp/projects/lakehouse/infra/storage/minio/minio.yaml): Deploys MinIO S3 object storage server with API port `9000` and Console port `9001`. Includes the automated `minio-create-buckets` Kubernetes Job using `minio/mc` to initialize `warehouse`, `bronze`, `silver`, and `gold` buckets on startup.
+* [`infra/catalog/nessie/nessie.yaml`](file:///c:/Users/Hp/projects/lakehouse/infra/catalog/nessie/nessie.yaml): Deploys Project Nessie REST catalog on port `19120`. Manages table references, commit trees, and Iceberg metadata pointers on git-like branches (default `main`).
+
+#### Query Engine (`infra/engine/trino/`)
+* [`infra/engine/trino/trino-configmap.yaml`](file:///c:/Users/Hp/projects/lakehouse/infra/engine/trino/trino-configmap.yaml): Central Trino coordinator configuration:
+  * `config.properties`: Coordinates memory, HTTPS on port `8443`, Keycloak OAuth2 SSO integration for Web UI, and file-based password authentication.
+  * `iceberg.properties`: Configures Iceberg connector pointing to Nessie REST Catalog (`http://nessie:19120/api/v1`) and MinIO S3 endpoint (`http://minio:9000`).
+  * `password.db`: Bcrypt hashed password database enforcing strict authentication (`admin:Admin@2026`, `my-admin:Admin@2026`, `demo-analyst:Analyst@2026`).
+  * `rules.json`: Zero-Trust Role-Based Access Control matrix. Restricts `demo-analyst` to `SELECT` on `silver` and `gold` while denying `bronze`, and denies all access to unauthenticated/unknown users.
+* [`infra/engine/trino/trino.yaml`](file:///c:/Users/Hp/projects/lakehouse/infra/engine/trino/trino.yaml): Trino coordinator deployment manifest. Automatically generates JKS TLS certificate on startup, configures container bash aliases to enforce HTTPS CLI access, and exposes ports `8080` (HTTP) and `8443` (HTTPS).
+
+#### Orchestration (`orchestration/airflow/`)
+* [`orchestration/airflow/airflow.yaml`](file:///c:/Users/Hp/projects/lakehouse/orchestration/airflow/airflow.yaml): Deploys Apache Airflow 2.9.1 webserver and scheduler in a single container. Mounts DAG directory from ConfigMap and connects to the PostgreSQL metadata database.
+* [`orchestration/airflow/dags-configmap.yaml`](file:///c:/Users/Hp/projects/lakehouse/orchestration/airflow/dags-configmap.yaml): Kubernetes ConfigMap storing DAG code to inject DAGs into Airflow pods declaratively.
+
+---
+
+### 3.5 Datasets & Project Documentation
+* [`sample_orders.xlsx`](file:///c:/Users/Hp/projects/lakehouse/sample_orders.xlsx): Raw e-commerce sample spreadsheet (10 orders across Electronics, Apparel, Books, Home) used in the interactive Medallion tutorial.
+* [`WALKTHROUGH.md`](file:///c:/Users/Hp/projects/lakehouse/WALKTHROUGH.md): Verification report containing execution evidence, test logs, CLI outputs, and validation receipts across all 12 tutorial steps.
+* [`README.md`](file:///c:/Users/Hp/projects/lakehouse/README.md): Master technical guide and architectural blueprint for the entire lakehouse platform.
+
+---
+
+## 4. Step-by-Step Base Deployment (Pure `kubectl`)
 
 Deploy the entire lakehouse platform declaratively without any bash scripts:
 
@@ -174,7 +291,7 @@ kubectl apply -f orchestration/airflow/dags-configmap.yaml
 
 ---
 
-## 4. The 12-Step Hands-on End-to-End Tutorial
+## 5. The 12-Step Hands-on End-to-End Tutorial
 
 Follow this comprehensive, hands-on tutorial to experience every platform component across both Web UI and terminal CLI.
 
@@ -384,7 +501,7 @@ For fast local testing without TLS certificates:
 
 ---
 
-## 5. Web Interfaces & Port-Forwarding Quick Reference
+## 6. Web Interfaces & Port-Forwarding Quick Reference
 
 Run these background port-forward commands to access all services locally:
 
@@ -408,7 +525,7 @@ kubectl port-forward -n lakehouse svc/airflow-webserver 8083:8080
 | Service | Address / URL | Protocol & Auth | Default Credentials | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | **Trino Web UI** | `https://localhost:8443/ui/` | HTTPS (OAuth2 SSO) | `my-admin` (`Admin@2026`)<br>`demo-analyst` (`Analyst@2026`) | Cluster metrics, active query execution graphs, and RBAC logs. |
-| **DBeaver (Trino JDBC)** | `localhost:8082` | Trino HTTP Protocol | `my-admin` (No password) | Standalone desktop SQL client connection to `iceberg` catalog. |
+| **DBeaver (Trino JDBC)** | `localhost:8443` *(or `8082`)* | HTTPS *(or HTTP)* | `my-admin` (`Admin@2026`)<br>`demo-analyst` (`Analyst@2026`) | Desktop SQL client with mandatory password authentication and RBAC enforcement. |
 | **Keycloak IAM** | `http://localhost:8081` | HTTP | `admin` / `admin` | Realm: `lakehouse`. Manage clients, roles, users, and SSO flows. |
 | **MinIO Console** | `http://localhost:9001` | HTTP (OIDC SSO) | `minioadmin` / `minioadmin` *(or Keycloak SSO)* | S3 storage explorer for `warehouse`, `bronze`, `silver`, and `gold` buckets. |
 | **Apache Airflow** | `http://localhost:8083` | HTTP | `admin` / `FqEAqUgX8SNbqtDG` | Orchestration dashboard for Medallion pipeline execution and scheduling. |
