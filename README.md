@@ -125,7 +125,7 @@ Deploy the entire lakehouse platform declaratively without any bash scripts. Eac
 # 1. Create Lakehouse Namespace
 kubectl apply -f infra/k8s/base/namespace.yaml
 ```
-> **Manifest Breakdown — [`infra/k8s/base/namespace.yaml`](file:///c:/Users/Hp/projects/lakehouse/infra/k8s/base/namespace.yaml):**
+> **Manifest Breakdown — [`infra/k8s/base/namespace.yaml`](infra/k8s/base/namespace.yaml):**
 > * **Purpose:** Establishes the dedicated `lakehouse` Kubernetes namespace.
 > * **Role:** Provides an isolated administrative and network boundary ensuring all platform workloads (Keycloak, MinIO, Nessie, Trino, Airflow) run cleanly separated from default or system namespaces.
 
@@ -144,7 +144,7 @@ kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.
 kubectl apply -f infra/security/keycloak/postgres.yaml
 kubectl rollout status deployment/postgres-keycloak -n lakehouse
 ```
-> **Manifest Breakdown — [`infra/security/keycloak/postgres.yaml`](file:///c:/Users/Hp/projects/lakehouse/infra/security/keycloak/postgres.yaml):**
+> **Manifest Breakdown — [`infra/security/keycloak/postgres.yaml`](infra/security/keycloak/postgres.yaml):**
 > * **Purpose:** Provisions a persistent PostgreSQL 15 database backend for Keycloak.
 > * **Key Configurations:** Configures a PersistentVolumeClaim (`postgres-kc-pvc`), sets credentials (`user: keycloak`, `db: keycloak`), provisions readiness health probes, and exposes an internal ClusterIP service (`postgres-keycloak:5432`).
 
@@ -152,7 +152,7 @@ kubectl rollout status deployment/postgres-keycloak -n lakehouse
 # 2. Apply Realm Definitions & OIDC Clients
 kubectl apply -f infra/security/keycloak/realm-configmap.yaml
 ```
-> **Manifest Breakdown — [`infra/security/keycloak/realm-configmap.yaml`](file:///c:/Users/Hp/projects/lakehouse/infra/security/keycloak/realm-configmap.yaml):**
+> **Manifest Breakdown — [`infra/security/keycloak/realm-configmap.yaml`](infra/security/keycloak/realm-configmap.yaml):**
 > * **Purpose:** Declarative JSON import defining the `lakehouse` security realm.
 > * **Key Configurations:**
 >   * Pre-registers OpenID Connect (OIDC) clients: `trino` (confidential client with secret `trino-client-secret-12345`) and `minio` (public client).
@@ -164,7 +164,7 @@ kubectl apply -f infra/security/keycloak/realm-configmap.yaml
 kubectl apply -f infra/security/keycloak/keycloak.yaml
 kubectl rollout status deployment/keycloak -n lakehouse --timeout=120s
 ```
-> **Manifest Breakdown — [`infra/security/keycloak/keycloak.yaml`](file:///c:/Users/Hp/projects/lakehouse/infra/security/keycloak/keycloak.yaml):**
+> **Manifest Breakdown — [`infra/security/keycloak/keycloak.yaml`](infra/security/keycloak/keycloak.yaml):**
 > * **Purpose:** Runs Keycloak 24.0.5 in production-optimized mode.
 > * **Key Configurations:** Connects to PostgreSQL using JDBC environment variables, mounts the realm configmap for auto-import on startup, exposes HTTP port `8080`, and configures an Ingress resource for `http://keycloak.local`.
 
@@ -172,7 +172,7 @@ kubectl rollout status deployment/keycloak -n lakehouse --timeout=120s
 # 4. Create Shared OIDC Client Secrets
 kubectl apply -f infra/security/keycloak/oidc-secrets.yaml
 ```
-> **Manifest Breakdown — [`infra/security/keycloak/oidc-secrets.yaml`](file:///c:/Users/Hp/projects/lakehouse/infra/security/keycloak/oidc-secrets.yaml):**
+> **Manifest Breakdown — [`infra/security/keycloak/oidc-secrets.yaml`](infra/security/keycloak/oidc-secrets.yaml):**
 > * **Purpose:** Stores shared OIDC authentication secrets as a Kubernetes Secret.
 > * **Key Configurations:** Provides `KEYCLOAK_CLIENT_SECRET=trino-client-secret-12345` enabling Trino and MinIO to validate OAuth2 access tokens against Keycloak endpoints.
 
@@ -186,7 +186,7 @@ kubectl apply -f infra/storage/minio/minio.yaml
 kubectl rollout status deployment/minio -n lakehouse
 kubectl wait --for=condition=complete job/minio-create-buckets -n lakehouse --timeout=60s
 ```
-> **Manifest Breakdown — [`infra/storage/minio/minio.yaml`](file:///c:/Users/Hp/projects/lakehouse/infra/storage/minio/minio.yaml):**
+> **Manifest Breakdown — [`infra/storage/minio/minio.yaml`](infra/storage/minio/minio.yaml):**
 > * **Purpose:** Provides enterprise S3-compatible object storage for the lakehouse.
 > * **Key Configurations:**
 >   * Deploys MinIO server exposing port `9000` (S3 API) and port `9001` (Web Console).
@@ -201,7 +201,7 @@ kubectl wait --for=condition=complete job/minio-create-buckets -n lakehouse --ti
 kubectl apply -f infra/catalog/nessie/nessie.yaml
 kubectl rollout status deployment/nessie -n lakehouse --timeout=60s
 ```
-> **Manifest Breakdown — [`infra/catalog/nessie/nessie.yaml`](file:///c:/Users/Hp/projects/lakehouse/infra/catalog/nessie/nessie.yaml):**
+> **Manifest Breakdown — [`infra/catalog/nessie/nessie.yaml`](infra/catalog/nessie/nessie.yaml):**
 > * **Purpose:** Transactional catalog for Apache Iceberg implementing the REST Catalog specification.
 > * **Key Configurations:** Runs Nessie on port `19120`. Manages table pointer commits, snapshot logs, and Git-like branching/tagging on the default `main` branch.
 
@@ -213,7 +213,7 @@ kubectl rollout status deployment/nessie -n lakehouse --timeout=60s
 # 1. Apply Trino Engine, Iceberg Catalog, Authentication & RBAC Configurations
 kubectl apply -f infra/engine/trino/trino-configmap.yaml
 ```
-> **Manifest Breakdown — [`infra/engine/trino/trino-configmap.yaml`](file:///c:/Users/Hp/projects/lakehouse/infra/engine/trino/trino-configmap.yaml):**
+> **Manifest Breakdown — [`infra/engine/trino/trino-configmap.yaml`](infra/engine/trino/trino-configmap.yaml):**
 > * **Purpose:** The core configuration engine for Trino. Defines 5 critical sub-configurations:
 >   * `config.properties`: Coordinator memory (2GB max, 1GB per node), HTTPS port `8443`, Keycloak OAuth2 SSO for the Web UI, and Bcrypt password authentication.
 >   * `iceberg.properties`: Native Iceberg connector pointing to Nessie REST Catalog (`http://nessie.lakehouse.svc.cluster.local:19120/api/v1`) and MinIO S3 endpoint (`http://minio.lakehouse.svc.cluster.local:9000`).
@@ -225,7 +225,7 @@ kubectl apply -f infra/engine/trino/trino-configmap.yaml
 kubectl apply -f infra/engine/trino/trino.yaml
 kubectl rollout status deployment/trino -n lakehouse --timeout=120s
 ```
-> **Manifest Breakdown — [`infra/engine/trino/trino.yaml`](file:///c:/Users/Hp/projects/lakehouse/infra/engine/trino/trino.yaml):**
+> **Manifest Breakdown — [`infra/engine/trino/trino.yaml`](infra/engine/trino/trino.yaml):**
 > * **Purpose:** Runs the Trino v444 distributed SQL query coordinator.
 > * **Key Configurations:**
 >   * Startup hook automatically generates a Java Keystore (`/data/trino/keystore.jks`) for SSL/TLS encryption.
@@ -244,7 +244,7 @@ kubectl exec -n lakehouse deployment/postgres-keycloak -- psql -U keycloak -d ke
 kubectl apply -f orchestration/airflow/airflow.yaml
 kubectl rollout status deployment/airflow -n lakehouse --timeout=120s
 ```
-> **Manifest Breakdown — [`orchestration/airflow/airflow.yaml`](file:///c:/Users/Hp/projects/lakehouse/orchestration/airflow/airflow.yaml):**
+> **Manifest Breakdown — [`orchestration/airflow/airflow.yaml`](orchestration/airflow/airflow.yaml):**
 > * **Purpose:** Runs Apache Airflow 2.9.1 webserver and scheduler in a single container.
 > * **Key Configurations:** Connects to PostgreSQL database `airflow` for metadata storage, sets `AIRFLOW__CORE__LOAD_EXAMPLES=False`, exposes Web UI on port `8080`, and mounts the DAG volume.
 
@@ -252,7 +252,7 @@ kubectl rollout status deployment/airflow -n lakehouse --timeout=120s
 # 3. Mount Pipeline DAGs via ConfigMap
 kubectl apply -f orchestration/airflow/dags-configmap.yaml
 ```
-> **Manifest Breakdown — [`orchestration/airflow/dags-configmap.yaml`](file:///c:/Users/Hp/projects/lakehouse/orchestration/airflow/dags-configmap.yaml):**
+> **Manifest Breakdown — [`orchestration/airflow/dags-configmap.yaml`](orchestration/airflow/dags-configmap.yaml):**
 > * **Purpose:** Kubernetes ConfigMap storing DAG definitions. Mounted directly into `/opt/airflow/dags/` so pipelines are automatically discovered by the Airflow scheduler.
 
 ---
@@ -283,7 +283,7 @@ Follow this comprehensive, hands-on tutorial to experience every platform compon
 ---
 
 ### Step 2: Manually Ingest Excel Data via MinIO Console UI
-We provided a sample e-commerce dataset: [`sample_orders.xlsx`](file:///c:/Users/Hp/projects/lakehouse/sample_orders.xlsx) containing 10 orders:
+We provided a sample e-commerce dataset: [`sample_orders.xlsx`](sample_orders.xlsx) containing 10 orders:
 
 | order_id | customer_name | category | amount | order_date | city |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -298,7 +298,7 @@ We provided a sample e-commerce dataset: [`sample_orders.xlsx`](file:///c:/Users
 | ORD-509 | Leyla Sahin | Books | 95.00 | 2026-09-10 | Istanbul |
 | ORD-510 | Murat Arda | Electronics | 1450.00 | 2026-09-10 | Bursa |
 
-> **Dataset Overview — [`sample_orders.xlsx`](file:///c:/Users/Hp/projects/lakehouse/sample_orders.xlsx):**
+> **Dataset Overview — [`sample_orders.xlsx`](sample_orders.xlsx):**
 > * **Structure:** Uncompressed raw Excel spreadsheet containing 10 multi-category e-commerce transactions.
 > * **Schema:** `order_id` (VARCHAR), `customer_name` (VARCHAR), `category` (VARCHAR), `amount` (DOUBLE), `order_date` (VARCHAR), `city` (VARCHAR).
 > * **Role in Pipeline:** Serves as the raw, unstructured source asset uploaded into the `bronze` S3 bucket to demonstrate ingestion into the ACID Lakehouse without prior conversion.
@@ -321,7 +321,7 @@ flowchart LR
     T3 --> T4["4_aggregate_silver_to_gold\n(Category Financial KPIs)"]
 ```
 
-> **Pipeline Architecture & Code Deep-Dive — [`excel_to_gold_dag.py`](file:///c:/Users/Hp/projects/lakehouse/orchestration/airflow/dags/excel_to_gold_dag.py):**
+> **Pipeline Architecture & Code Deep-Dive — [`excel_to_gold_dag.py`](orchestration/airflow/dags/excel_to_gold_dag.py):**
 > * **Dependencies & Libraries:**
 >   * `boto3`: S3 client connecting to MinIO (`http://minio.lakehouse.svc.cluster.local:9000`) with credentials `minioadmin:minioadmin`.
 >   * `pandas` & `openpyxl`: Reads and parses the multi-column Excel binary stream in-memory without local disk bottlenecks.
@@ -329,17 +329,17 @@ flowchart LR
 > * **Internal Functions & Task Flow:**
 >   * `get_trino_cursor()`: Establishes a TLS-encrypted database connection to Trino (`host='trino.lakehouse.svc.cluster.local'`, `port=8443`, `http_scheme='https'`, `verify=False`, `auth=BasicAuthentication('admin', 'Admin@2026')`) ensuring zero credential leakage.
 >   * `task_read_excel_and_load_bronze()`: Streams `sample_orders.xlsx` from bucket `bronze` in MinIO, parses into a DataFrame, executes `CREATE TABLE IF NOT EXISTS iceberg.bronze.excel_orders`, and inserts raw records with `ingested_at = NOW()`.
->   * `task_transform_silver()`: Executes [`transformations/sql/silver_excel_orders.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/sql/silver_excel_orders.sql). Standardizes strings with `TRIM()`, casts data types, and applies windowed deduplication `ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY ingested_at DESC) = 1` into `iceberg.silver.excel_orders_cleaned` partitioned by `city`.
+>   * `task_transform_silver()`: Executes [`transformations/sql/silver_excel_orders.sql`](transformations/sql/silver_excel_orders.sql). Standardizes strings with `TRIM()`, casts data types, and applies windowed deduplication `ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY ingested_at DESC) = 1` into `iceberg.silver.excel_orders_cleaned` partitioned by `city`.
 >   * `task_quality_checks_silver()`: Automated data contract validation asserting that duplicate order IDs count is `0` and non-positive/null amounts count is `0`, terminating with `ValueError` if any anomalies exist.
->   * `task_aggregate_gold()`: Executes [`transformations/sql/gold_excel_sales_kpis.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/sql/gold_excel_sales_kpis.sql), calculating total revenue, average order value, and order count grouped by category into business mart `iceberg.gold.excel_sales_kpis`.
+>   * `task_aggregate_gold()`: Executes [`transformations/sql/gold_excel_sales_kpis.sql`](transformations/sql/gold_excel_sales_kpis.sql), calculating total revenue, average order value, and order count grouped by category into business mart `iceberg.gold.excel_sales_kpis`.
 >
 > **Transformation SQL Files Executed by DAG:**
-> * [`transformations/sql/silver_excel_orders.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/sql/silver_excel_orders.sql): Pure SQL model for cleansing, type casting, and deduplicating Bronze orders into Silver.
-> * [`transformations/sql/gold_excel_sales_kpis.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/sql/gold_excel_sales_kpis.sql): Pure SQL model aggregating Silver cleaned transactions into actionable Gold business KPIs.
+> * [`transformations/sql/silver_excel_orders.sql`](transformations/sql/silver_excel_orders.sql): Pure SQL model for cleansing, type casting, and deduplicating Bronze orders into Silver.
+> * [`transformations/sql/gold_excel_sales_kpis.sql`](transformations/sql/gold_excel_sales_kpis.sql): Pure SQL model aggregating Silver cleaned transactions into actionable Gold business KPIs.
 >
 > **Accompanying Python Pipelines in Repository:**
-> * [`ecommerce_order_pipeline.py`](file:///c:/Users/Hp/projects/lakehouse/orchestration/airflow/dags/ecommerce_order_pipeline.py): Simulates an automated transactional e-commerce pipeline generating `iceberg.bronze.orders`, `iceberg.silver.orders_cleaned`, and `iceberg.gold.sales_financial_kpis`.
-> * [`lakehouse_elt_pipeline.py`](file:///c:/Users/Hp/projects/lakehouse/orchestration/airflow/dags/lakehouse_elt_pipeline.py): Master ELT orchestrator that coordinates raw data ingestion and executes dbt models.
+> * [`ecommerce_order_pipeline.py`](orchestration/airflow/dags/ecommerce_order_pipeline.py): Simulates an automated transactional e-commerce pipeline generating `iceberg.bronze.orders`, `iceberg.silver.orders_cleaned`, and `iceberg.gold.sales_financial_kpis`.
+> * [`lakehouse_elt_pipeline.py`](orchestration/airflow/dags/lakehouse_elt_pipeline.py): Master ELT orchestrator that coordinates raw data ingestion and executes dbt models.
 
 ---
 
@@ -383,7 +383,7 @@ kubectl exec -it -n lakehouse deployment/trino -- trino --catalog iceberg --user
 ```
 
 > **Security & Identity Note:** 
-> We explicitly pass `--user my-admin`. Because our RBAC authorization matrix ([`rules.json`](file:///c:/Users/Hp/projects/lakehouse/infra/engine/trino/trino-configmap.yaml)) strictly locks down the `iceberg` catalog against unauthenticated or unknown OS users (`trino`), attempting to connect without `--user` will result in `Access Denied: Cannot access catalog iceberg` when running `SHOW SCHEMAS`. Supplying `--user my-admin` identifies you with full administrative privileges.
+> We explicitly pass `--user my-admin`. Because our RBAC authorization matrix ([`rules.json`](infra/engine/trino/trino-configmap.yaml)) strictly locks down the `iceberg` catalog against unauthenticated or unknown OS users (`trino`), attempting to connect without `--user` will result in `Access Denied: Cannot access catalog iceberg` when running `SHOW SCHEMAS`. Supplying `--user my-admin` identifies you with full administrative privileges.
 
 Run queries to inspect the data layers:
 
@@ -428,7 +428,7 @@ WHERE category = 'Electronics';
 ```
 *(All 4 deleted records appear directly from the past!)*
 
-#### Practical Execution with [`transformations/query_snapshots.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/query_snapshots.sql)
+#### Practical Execution with [`transformations/query_snapshots.sql`](transformations/query_snapshots.sql)
 Instead of typing queries manually, execute the pre-built snapshot inspection script directly from your terminal or desktop client:
 
 ```powershell
@@ -438,9 +438,9 @@ Get-Content transformations/query_snapshots.sql | kubectl exec -i -n lakehouse d
 # In Linux / macOS / Git Bash:
 kubectl exec -i -n lakehouse deployment/trino -- trino --catalog iceberg --user my-admin < transformations/query_snapshots.sql
 ```
-*(Alternatively, open [`transformations/query_snapshots.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/query_snapshots.sql) in DBeaver and press `Alt+X` to run all statements).*
+*(Alternatively, open [`transformations/query_snapshots.sql`](transformations/query_snapshots.sql) in DBeaver and press `Alt+X` to run all statements).*
 
-> **Script Overview — [`transformations/query_snapshots.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/query_snapshots.sql):**
+> **Script Overview — [`transformations/query_snapshots.sql`](transformations/query_snapshots.sql):**
 > Provides diagnostic queries inspecting Apache Iceberg internal metadata tables (`$snapshots`, `$history`, `$manifests`, `$files`) across `bronze.excel_orders` and `bronze.orders`, enabling data engineers to inspect commit timestamps, operation types (`append`, `overwrite`, `delete`), and snapshot IDs.
 
 ---
@@ -457,7 +457,7 @@ WHERE category = 'Electronics';
 SELECT count(*) AS total_orders FROM bronze.excel_orders;
 ```
 
-#### Automated End-to-End Disaster Recovery Script: [`transformations/time_travel_demo.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/time_travel_demo.sql)
+#### Automated End-to-End Disaster Recovery Script: [`transformations/time_travel_demo.sql`](transformations/time_travel_demo.sql)
 The repository provides a complete, automated end-to-end disaster recovery demonstration script that walks through the entire cycle (initial state $\rightarrow$ accidental deletion $\rightarrow$ damaged state verification $\rightarrow$ time-travel query $\rightarrow$ historical restoration $\rightarrow$ zero-loss validation).
 
 Run it directly with a single command:
@@ -479,9 +479,9 @@ DELETE: 4 rows
 INSERT: 4 rows
 "4. FINAL RESTORED STATE (ZERO DATA LOSS)","10","5405.5"
 ```
-*(Or open [`transformations/time_travel_demo.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/time_travel_demo.sql) inside DBeaver and press `Alt+X` to watch all 6 phases execute interactively).*
+*(Or open [`transformations/time_travel_demo.sql`](transformations/time_travel_demo.sql) inside DBeaver and press `Alt+X` to watch all 6 phases execute interactively).*
 
-> **Playbook Overview — [`transformations/time_travel_demo.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/time_travel_demo.sql):**
+> **Playbook Overview — [`transformations/time_travel_demo.sql`](transformations/time_travel_demo.sql):**
 > Complete SQL playbook proving ACID rollback capabilities on Apache Iceberg. Demonstrates simulated data loss, discovers historical snapshot metadata, executes time-travel extraction, and achieves 100% zero-data-loss recovery without taking the platform offline.
 
 ---
@@ -543,15 +543,15 @@ For fast local testing without TLS certificates:
 ---
 
 ### Step 13: Declarative dbt Semantic Modeling & Governance (`transformations/dbt/`)
-In enterprise lakehouses, raw data layers are modeled and governed using **dbt (data build tool)** with SQL-based declarative DAGs, schema tests, and documentation. The project includes a complete `dbt-trino` transformation project under [`transformations/dbt/`](file:///c:/Users/Hp/projects/lakehouse/transformations/dbt/):
+In enterprise lakehouses, raw data layers are modeled and governed using **dbt (data build tool)** with SQL-based declarative DAGs, schema tests, and documentation. The project includes a complete `dbt-trino` transformation project under [`transformations/dbt/`](transformations/dbt/):
 
-> **dbt Models & Governance Architecture — [`transformations/dbt/`](file:///c:/Users/Hp/projects/lakehouse/transformations/dbt/):**
-> * [`dbt_project.yml`](file:///c:/Users/Hp/projects/lakehouse/transformations/dbt/dbt_project.yml): The master manifest configuring the project `lakehouse_dbt`. Defines directory paths for models, tests, and seeds, connects to the `lakehouse_trino` profile, and instructs dbt to materialize Silver and Gold models as native Iceberg tables (`+materialized: table`).
-> * [`profiles.yml`](file:///c:/Users/Hp/projects/lakehouse/transformations/dbt/profiles.yml): Defines the connection configuration (`lakehouse_trino`) targeting the in-cluster Trino coordinator (`trino.lakehouse.svc.cluster.local:8080`, database: `iceberg`, schema: `bronze`, 4 execution threads).
-> * [`models/bronze/sources.yml`](file:///c:/Users/Hp/projects/lakehouse/transformations/dbt/models/bronze/sources.yml): Declarative source contract defining the raw ingested table `iceberg.bronze.raw_users` with detailed column descriptions (`id`, `name`, `username`, `email`, `city`, `company_name`, `ingested_at`) so upstream models can reference it with `{{ source('bronze', 'raw_users') }}`.
-> * [`models/silver/stg_users.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/dbt/models/silver/stg_users.sql): Cleansing and standardization model. Reads raw users from Bronze, casts `id` to `INTEGER` and timestamps to `TIMESTAMP(6)`, applies string trimming and lowercase normalization on usernames and emails, filters out invalid null IDs, and outputs optimized Parquet tables into `iceberg.silver.stg_users`.
-> * [`models/silver/schema.yml`](file:///c:/Users/Hp/projects/lakehouse/transformations/dbt/models/silver/schema.yml): Automated data quality testing specification for the Silver layer. Applies strict data integrity rules: asserts that `user_id` is both `unique` and `not_null`, and ensures `email_address` is `not_null`.
-> * [`models/gold/dim_users_summary.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/dbt/models/gold/dim_users_summary.sql): Dimensional business mart aggregating users by city. Calculates `total_users`, `unique_companies`, first/last ingestion timestamps, and calculation time into `iceberg.gold.dim_users_summary`.
+> **dbt Models & Governance Architecture — [`transformations/dbt/`](transformations/dbt/):**
+> * [`dbt_project.yml`](transformations/dbt/dbt_project.yml): The master manifest configuring the project `lakehouse_dbt`. Defines directory paths for models, tests, and seeds, connects to the `lakehouse_trino` profile, and instructs dbt to materialize Silver and Gold models as native Iceberg tables (`+materialized: table`).
+> * [`profiles.yml`](transformations/dbt/profiles.yml): Defines the connection configuration (`lakehouse_trino`) targeting the in-cluster Trino coordinator (`trino.lakehouse.svc.cluster.local:8080`, database: `iceberg`, schema: `bronze`, 4 execution threads).
+> * [`models/bronze/sources.yml`](transformations/dbt/models/bronze/sources.yml): Declarative source contract defining the raw ingested table `iceberg.bronze.raw_users` with detailed column descriptions (`id`, `name`, `username`, `email`, `city`, `company_name`, `ingested_at`) so upstream models can reference it with `{{ source('bronze', 'raw_users') }}`.
+> * [`models/silver/stg_users.sql`](transformations/dbt/models/silver/stg_users.sql): Cleansing and standardization model. Reads raw users from Bronze, casts `id` to `INTEGER` and timestamps to `TIMESTAMP(6)`, applies string trimming and lowercase normalization on usernames and emails, filters out invalid null IDs, and outputs optimized Parquet tables into `iceberg.silver.stg_users`.
+> * [`models/silver/schema.yml`](transformations/dbt/models/silver/schema.yml): Automated data quality testing specification for the Silver layer. Applies strict data integrity rules: asserts that `user_id` is both `unique` and `not_null`, and ensures `email_address` is `not_null`.
+> * [`models/gold/dim_users_summary.sql`](transformations/dbt/models/gold/dim_users_summary.sql): Dimensional business mart aggregating users by city. Calculates `total_users`, `unique_companies`, first/last ingestion timestamps, and calculation time into `iceberg.gold.dim_users_summary`.
 
 To run dbt transformations and data quality tests locally or from within a container:
 ```powershell
