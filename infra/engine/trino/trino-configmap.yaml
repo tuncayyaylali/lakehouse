@@ -59,11 +59,13 @@ data:
     file.refresh-period=5s
 
   password.db: |
+    admin:$2y$10$iQ6kXZX7vGCLqhC/CSNOQeB7feA6Phs84FAKRVS/ZeKzQGAg2Y6h2
     my-admin:$2y$10$iQ6kXZX7vGCLqhC/CSNOQeB7feA6Phs84FAKRVS/ZeKzQGAg2Y6h2
-    demo-admin:$2y$10$K/4iThS5qh8L5kPGI.CGPuqlqARGfCzErEAdDjEvLtoBwbd1KIRTy
-    admin:$2y$10$aSEd7eC3sPnLmxU0C9KKn.wIdZABqE/xOsFLAd.v7sDG/Dk4iQZTG
+    demo-admin:$2y$10$iQ6kXZX7vGCLqhC/CSNOQeB7feA6Phs84FAKRVS/ZeKzQGAg2Y6h2
+    admin123:$2y$10$aSEd7eC3sPnLmxU0C9KKn.wIdZABqE/xOsFLAd.v7sDG/Dk4iQZTG
+    analyst:$2y$10$6KPyfu8NUT06Hi5kS5iPdOgf7HLsvlxp6oKzejbZ58rjtbby4NEy6
     demo-analyst:$2y$10$6KPyfu8NUT06Hi5kS5iPdOgf7HLsvlxp6oKzejbZ58rjtbby4NEy6
-    analyst:$2y$10$3HYexu72BVoi4qTU05eu/.qcvO2/qmCWdcQTQoyNFwT.7kLazYJi.
+    analyst123:$2y$10$3HYexu72BVoi4qTU05eu/.qcvO2/qmCWdcQTQoyNFwT.7kLazYJi.
 
   access-control.properties: |
     access-control.name=file

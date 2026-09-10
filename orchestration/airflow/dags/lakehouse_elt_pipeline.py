@@ -15,9 +15,11 @@ default_args = {
 def get_trino_cursor():
     conn = trino.dbapi.connect(
         host='trino.lakehouse.svc.cluster.local',
-        port=8080,
+        port=8443,
+        http_scheme='https',
+        verify=False,
         user='admin',
-        auth=trino.auth.BasicAuthentication('admin', 'Admin@123'),
+        auth=trino.auth.BasicAuthentication('admin', 'Admin@2026'),
         catalog='iceberg',
     )
     return conn.cursor()
