@@ -26,6 +26,7 @@ def get_trino_cursor():
         host='trino.lakehouse.svc.cluster.local',
         port=8080,
         user='admin',
+        auth=trino.auth.BasicAuthentication('admin', 'Admin@123'),
         catalog='iceberg',
     )
     return conn.cursor()

@@ -348,25 +348,39 @@ Compare permissions between the restricted analyst and the admin:
 
 ---
 
-### Step 12: Standalone DBeaver Desktop Client Integration
-Query the entire lakehouse platform visually using DBeaver:
+### Step 12: Standalone DBeaver Desktop Client Integration (Enterprise Password Security)
+Query the entire lakehouse platform visually using DBeaver while enforcing mandatory password verification to prevent identity spoofing:
 
+#### Option A: Secure HTTPS Connection with Password Authentication (Recommended)
+Trino is configured with a built-in Bcrypt Password Authenticator (`/etc/trino/password.db`) on HTTPS port `8443`:
 1. Open **DBeaver** $\rightarrow$ **New Database Connection** $\rightarrow$ Select **Trino**.
-2. **Connection Settings (Main Tab):**
+2. **Main Settings:**
    * **Host:** `localhost`
-   * **Port:** `8082`
+   * **Port:** `8443`
    * **Database / Catalog:** `iceberg`
    * **Username:** `my-admin` *(or `demo-analyst`)*
-   * **Password:** *(Leave blank)*
-   * **SSL:** Unchecked (Off)
-3. Click **Test Connection** $\rightarrow$ Observe **"Connected"**. Click **Finish**.
-4. In the Database Navigator on the left, expand `iceberg` to browse `bronze`, `silver`, and `gold`.
-5. Open SQL Editor (`F3`) and run:
+   * **Password:** `Admin@2026` *(or `Analyst@2026`)*
+3. **Driver Properties Tab:**
+   * Set `SSL` to `true`
+   * Set `SSLVerification` to `NONE` *(to accept self-signed development certificates)*
+4. Click **Test Connection** $\rightarrow$ Observe **"Connected"**. Click **Finish**.
+5. **Anti-Spoofing Security Verification:**
+   * If a user enters `Username: my-admin` with an incorrect password or no password, Trino immediately rejects the connection with:
+     `Access Denied: Invalid credentials (HTTP 401 Unauthorized)`
+   * An analyst cannot masquerade as an administrator without possessing the admin's secret password!
+
+#### Option B: Internal Development HTTP Connection (Port 8082)
+For fast local testing without TLS certificates:
+* **Host:** `localhost` | **Port:** `8082` | **Catalog:** `iceberg` | **SSL:** Unchecked
+
+#### Browsing and Querying:
+1. In the Database Navigator on the left, expand `iceberg` to browse `bronze`, `silver`, and `gold`.
+2. Open SQL Editor (`F3`) and run:
    ```sql
    SELECT * FROM iceberg.gold.excel_sales_kpis;
    ```
    *(View the colored interactive data grid).*
-6. Test RBAC in DBeaver: Create a second connection with user `demo-analyst` and query `iceberg.bronze.excel_orders` to observe the red graphical **`Access Denied`** error dialog!
+3. Test RBAC in DBeaver: Connect as `demo-analyst` and query `iceberg.bronze.excel_orders` to observe the graphical **`Access Denied`** error dialog!
 
 ---
 

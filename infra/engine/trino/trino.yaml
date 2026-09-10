@@ -79,6 +79,12 @@ spec:
             - name: trino-config-vol
               mountPath: /etc/trino/catalog/iceberg.properties
               subPath: iceberg.properties
+            - name: trino-config-vol
+              mountPath: /etc/trino/password-authenticator.properties
+              subPath: password-authenticator.properties
+            - name: trino-config-vol
+              mountPath: /etc/trino/password.db
+              subPath: password.db
       volumes:
         - name: trino-config-vol
           configMap:

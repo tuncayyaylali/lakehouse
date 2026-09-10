@@ -67,9 +67,9 @@ flowchart TD
   `[2026-09-10 15:30:58 UTC] 5.3KiB STANDARD sample_orders.xlsx`
 
 ### Step 3: Medallion DAG & SQL Transformations
-* **DAG Script:** [`orchestration/airflow/dags/excel_to_gold_dag.py`](file:///c:/Users/Hp/projects/lakehouse/orchestration/airflow/dags/excel_to_gold_dag.py)
-* **Silver SQL Model:** [`transformations/sql/silver_excel_orders.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/sql/silver_excel_orders.sql) (deduplication via `ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY ingested_at DESC) = 1` and `amount > 0`).
-* **Gold SQL Model:** [`transformations/sql/gold_excel_sales_kpis.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/sql/gold_excel_sales_kpis.sql) (KPI aggregation by category).
+* **DAG Script:** [`orchestration/airflow/dags/excel_to_gold_dag.py`]
+* **Silver SQL Model:** [`transformations/sql/silver_excel_orders.sql`] (deduplication via `ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY ingested_at DESC) = 1` and `amount > 0`).
+* **Gold SQL Model:** [`transformations/sql/gold_excel_sales_kpis.sql`] (KPI aggregation by category).
 
 ### Step 4: Ingestion into Airflow Pod via `kubectl cp`
 * **Command Executed:**
