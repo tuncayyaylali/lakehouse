@@ -200,7 +200,7 @@ Follow this comprehensive, hands-on tutorial to experience every platform compon
 ---
 
 ### Step 2: Manually Ingest Excel Data via MinIO Console UI
-We provided a sample e-commerce dataset: [`sample_orders.xlsx`](file:///c:/Users/Hp/projects/lakehouse/sample_orders.xlsx) containing 10 orders:
+We provided a sample e-commerce dataset: [`sample_orders.xlsx`] containing 10 orders:
 
 | order_id | customer_name | category | amount | order_date | city |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -226,9 +226,9 @@ We provided a sample e-commerce dataset: [`sample_orders.xlsx`](file:///c:/Users
 ### Step 3: Authored Medallion Pipeline DAG & SQL Transformations
 The pipeline implements the full Lakehouse Medallion Architecture across 4 tasks:
 1. **`1_ingest_excel_to_bronze`:** Uses `boto3` and `pandas` to read `s3://bronze/sample_orders.xlsx` and writes raw records into `iceberg.bronze.excel_orders`.
-2. **`2_transform_bronze_to_silver`:** Executes [`transformations/sql/silver_excel_orders.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/sql/silver_excel_orders.sql), applying SQL window deduplication (`ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY ingested_at DESC) = 1`), trimming whitespace, casting dates, and writing to `iceberg.silver.excel_orders_cleaned`.
+2. **`2_transform_bronze_to_silver`:** Executes [`transformations/sql/silver_excel_orders.sql`], applying SQL window deduplication (`ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY ingested_at DESC) = 1`), trimming whitespace, casting dates, and writing to `iceberg.silver.excel_orders_cleaned`.
 3. **`3_quality_checks_silver`:** Validates that duplicate IDs and amounts $\le 0$ yield **0** violations.
-4. **`4_aggregate_silver_to_gold`:** Executes [`transformations/sql/gold_excel_sales_kpis.sql`](file:///c:/Users/Hp/projects/lakehouse/transformations/sql/gold_excel_sales_kpis.sql), aggregating category metrics into `iceberg.gold.excel_sales_kpis`.
+4. **`4_aggregate_silver_to_gold`:** Executes [`transformations/sql/gold_excel_sales_kpis.sql`], aggregating category metrics into `iceberg.gold.excel_sales_kpis`.
 
 ---
 
