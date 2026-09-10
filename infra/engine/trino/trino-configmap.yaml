@@ -76,24 +76,33 @@ data:
     {
       "catalogs": [
         {
-          "user": ".*",
+          "user": "admin|my-admin|demo-admin|demo-analyst|analyst",
           "catalog": ".*",
           "allow": "all"
         }
       ],
       "schemas": [
         {
+          "user": "admin|my-admin|demo-admin",
+          "schema": ".*",
+          "owner": true
+        },
+        {
           "user": ".*analyst.*",
           "schema": "bronze.*",
           "owner": false
         },
         {
-          "user": ".*",
+          "user": ".*analyst.*",
           "schema": ".*",
-          "owner": true
+          "owner": false
         }
       ],
       "tables": [
+        {
+          "user": "admin|my-admin|demo-admin",
+          "privileges": ["SELECT", "INSERT", "DELETE", "UPDATE", "OWNERSHIP"]
+        },
         {
           "user": ".*analyst.*",
           "schema": "bronze.*",
@@ -111,10 +120,6 @@ data:
           "schema": "gold.*",
           "table": ".*",
           "privileges": ["SELECT"]
-        },
-        {
-          "user": ".*",
-          "privileges": ["SELECT", "INSERT", "DELETE", "UPDATE", "OWNERSHIP"]
         }
       ]
     }
